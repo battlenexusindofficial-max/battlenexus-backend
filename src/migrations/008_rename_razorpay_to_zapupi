@@ -1,0 +1,83 @@
+-- 011_rename_razorpay_to_zapupi.sql
+-- Rename Razorpay columns to ZapUPI to match the new payment gateway
+
+BEGIN;
+
+-- ============================================================
+-- 1. wallet_topup_orders
+-- ============================================================
+
+-- Rename columns (safe: does nothing if already renamed)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'wallet_topup_orders'
+      AND column_name = 'razorpay_order_id'
+  ) THEN
+    ALTER TABLE wallet_topup_orders
+      RENAME COLUMN razorpay_order_id TO zapupi_order_id;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'wallet_topup_orders'
+      AND column_name = 'razorpay_payment_id'
+  ) THEN
+    ALTER TABLE wallet_topup_orders
+      RENAME COLUMN razorpay_payment_id TO zapupi_payment_id;
+  END IF;
+END $$;
+
+-- Drop old indexes (safe: IF EXISTS)
+DROP INDEX IF EXISTS idx_topup_orders_razorpay_order_id;
+DROP INDEX IF EXISTS idx_topup_orders_razorpay_payment_id;
+
+-- Recreate indexes on the new column names
+CREATE INDEX IF NOT EXISTS idx_topup_orders_zapupi_order_id
+  ON wallet_topup_orders(zapupi_order_id);
+CREATE INDEX IF NOT EXISTS idx_topup_orders_zapupi_payment_id
+  ON wallet_topup_orders(zapupi_payment_id);
+
+-- ============================================================
+-- 2. wallet_transactions
+-- ============================================================
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'wallet_transactions'
+      AND column_name = 'razorpay_order_id'
+  ) THEN
+    ALTER TABLE wallet_transactions
+      RENAME COLUMN razorpay_order_id TO zapupi_order_id;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'wallet_transactions'
+      AND column_name = 'razorpay_payment_id'
+  ) THEN
+    ALTER TABLE wallet_transactions
+      RENAME COLUMN razorpay_payment_id TO zapupi_payment_id;
+  END IF;
+END $$;
+
+-- Add zapupi_transaction_id if missing
+ALTER TABLE wallet_transactions
+  ADD COLUMN IF NOT EXISTS zapupi_transaction_id VARCHAR(100);
+
+-- Drop old indexes
+DROP INDEX IF EXISTS idx_transactions_razorpay_order_id;
+DROP INDEX IF EXISTS idx_transactions_razorpay_payment_id;
+
+-- Recreate
+CREATE INDEX IF NOT EXISTS idx_transactions_zapupi_order_id
+  ON wallet_transactions(zapupi_order_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_zapupi_payment_id
+  ON wallet_transactions(zapupi_payment_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_zapupi_transaction_id
+  ON wallet_transactions(zapupi_transaction_id);
+
+COMMIT;

@@ -1,0 +1,21 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Firebase / Google service-account credentials
+firebase-service-account.json
+serviceAccountKey.json
+*-service-account.json
+google-credentials.json
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# Build/output
+dist/
+build/
+coverage/
