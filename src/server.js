@@ -2,14 +2,28 @@
 
 require("dotenv").config();
 
-const { validateProductionConfig } = require("./config/production");
+// =========================================================
+// PRODUCTION CONFIGURATION
+// =========================================================
+
+const {
+  validateProductionConfig,
+} = require("./config/production");
 
 validateProductionConfig();
+
+// =========================================================
+// DEPENDENCIES
+// =========================================================
 
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+
+// =========================================================
+// DATABASE / MIDDLEWARE
+// =========================================================
 
 const { pool } = require("./config/database");
 const { errorHandler } = require("./middleware/errorHandler");
@@ -36,7 +50,9 @@ try {
     firebaseAdminLoaded = true;
 
     console.log("✅ Firebase Admin loaded successfully");
-    console.log(`📦 admin.auth type: ${typeof admin.auth}`);
+    console.log(
+      `📦 admin.auth type: ${typeof admin.auth}`,
+    );
   } else {
     console.warn(
       "⚠️ Firebase Admin initialization failed - continuing without it",
@@ -61,7 +77,7 @@ const apiV1Routes = require("./routes/api-v1");
 const authRoutes = require("./routes/auth.routes");
 
 // =========================================================
-// APP
+// EXPRESS APP
 // =========================================================
 
 const app = express();
@@ -73,7 +89,7 @@ const PUBLIC_BACKEND_URL =
   `http://localhost:${PORT}`;
 
 // =========================================================
-// CORS CONFIGURATION
+// CORS
 // =========================================================
 
 const configuredCorsOrigins = String(
@@ -99,11 +115,18 @@ app.set("trust proxy", 1);
 // DATABASE MIGRATIONS
 // =========================================================
 
-const startupPromise = runMigrations().catch((error) => {
-  console.error("❌ Startup migration failed:", error);
-  throw error;
-});
+const startupPromise = runMigrations().catch(
+  (error) => {
+    console.error(
+      "❌ Startup migration failed:",
+      error,
+    );
 
+    throw error;
+  },
+);
+
+// Make sure migrations finish before processing requests.
 app.use(async (req, res, next) => {
   try {
     await startupPromise;
@@ -124,14 +147,14 @@ app.use(
 );
 
 // =========================================================
-// CORS
+// CORS MIDDLEWARE
 // =========================================================
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests without an Origin header.
-      // This includes server-to-server/webhook requests.
+      // Server-to-server/webhook requests may not
+      // contain an Origin header.
       if (!origin) {
         return callback(null, true);
       }
@@ -166,13 +189,13 @@ app.use(
 );
 
 // =========================================================
-// LOGGER
+// HTTP LOGGER
 // =========================================================
 
 app.use(morgan("combined"));
 
 // =========================================================
-// REQUEST DEBUG
+// REQUEST DEBUG LOGGER
 // =========================================================
 
 app.use((req, res, next) => {
@@ -190,12 +213,16 @@ app.use((req, res, next) => {
 
   console.log(
     "CONTENT-ENCODING:",
-    JSON.stringify(req.headers["content-encoding"]),
+    JSON.stringify(
+      req.headers["content-encoding"],
+    ),
   );
 
   console.log(
     "CONTENT-LENGTH:",
-    JSON.stringify(req.headers["content-length"]),
+    JSON.stringify(
+      req.headers["content-length"],
+    ),
   );
 
   console.log(
@@ -211,11 +238,11 @@ app.use((req, res, next) => {
 });
 
 // =========================================================
-// BODY PARSER
+// JSON BODY PARSER
 // =========================================================
 //
-// Custom JSON parser is kept because webhook/payment
-// requests may need predictable body handling.
+// Custom parser retained from your existing server.
+// Maximum JSON body size: 10 MB.
 //
 
 app.use((req, res, next) => {
@@ -231,9 +258,10 @@ app.use((req, res, next) => {
     req.headers["content-type"] || "",
   ).toLowerCase();
 
-  // Only manually parse JSON requests.
   if (
-    !contentType.startsWith("application/json") &&
+    !contentType.startsWith(
+      "application/json",
+    ) &&
     !contentType.includes("+json")
   ) {
     return next();
@@ -249,7 +277,6 @@ app.use((req, res, next) => {
 
     body += chunk;
 
-    // Maximum request body size: 10 MB
     if (
       Buffer.byteLength(body, "utf8") >
       10 * 1024 * 1024
@@ -276,16 +303,16 @@ app.use((req, res, next) => {
     try {
       req.body = JSON.parse(body);
       next();
-    } catch (err) {
+    } catch (error) {
       return res.status(400).json({
         success: false,
         error: "Invalid JSON body",
-        detail: err.message,
+        detail: error.message,
       });
     }
   });
 
-  req.on("error", (err) => {
+  req.on("error", (error) => {
     if (done) return;
 
     done = true;
@@ -293,13 +320,13 @@ app.use((req, res, next) => {
     return res.status(400).json({
       success: false,
       error: "Failed to read request body",
-      detail: err.message,
+      detail: error.message,
     });
   });
 });
 
 // =========================================================
-// URL ENCODED BODY
+// URL-ENCODED BODY PARSER
 // =========================================================
 
 app.use(
@@ -349,8 +376,10 @@ app.get("/api/health", async (req, res) => {
     return res.status(200).json({
       success: true,
       status: "healthy",
+
       environment:
-        process.env.NODE_ENV || "development",
+        process.env.NODE_ENV ||
+        "development",
 
       timestamp: new Date().toISOString(),
 
@@ -393,7 +422,10 @@ app.get("/api/health", async (req, res) => {
 // =========================================================
 
 app.get("/health", async (req, res) => {
-  return res.redirect(307, "/api/health");
+  return res.redirect(
+    307,
+    "/api/health",
+  );
 });
 
 // =========================================================
@@ -423,12 +455,11 @@ app.use(errorHandler);
 // START SERVER
 // =========================================================
 
-let server;
+let server = null;
 
 const startServer = async () => {
   try {
-    // Make absolutely sure migrations have completed
-    // before accepting requests.
+    // Wait for database migrations.
     await startupPromise;
 
     server = app.listen(
@@ -439,7 +470,9 @@ const startServer = async () => {
           "\n========================================",
         );
 
-        console.log("🚀 BATTLE NEXUS BACKEND");
+        console.log(
+          "🚀 BATTLE NEXUS BACKEND",
+        );
 
         console.log(
           "========================================",
@@ -457,7 +490,7 @@ const startServer = async () => {
         );
 
         // =================================================
-        // ZAPUPI CONFIGURATION
+        // ZAPUPI
         // =================================================
 
         console.log(
@@ -468,7 +501,8 @@ const startServer = async () => {
         );
 
         // IMPORTANT:
-        // Use ZAPUPI_API_KEY, not the old ZAPUPI_ZAP_KEY.
+        // Current variable is ZAPUPI_API_KEY.
+        // Do NOT use the old ZAPUPI_ZAP_KEY here.
         console.log(
           `🔑 ZapUPI key: ${
             process.env.ZAPUPI_API_KEY
@@ -500,622 +534,12 @@ const startServer = async () => {
         // DATABASE
         // =================================================
 
-        console.log("🗄️ PostgreSQL: ✅ Ready");
-
-        // =================================================
-        // PUBLIC URLS
-        // =================================================
-
         console.log(
-          `🔗 API URL: ${PUBLIC_BACKEND_URL}/api`,
-        );
-
-        console.log(
-          `🔗 Health: ${PUBLIC_BACKEND_URL}/health`,
-        );
-
-        console.log(
-          "========================================\n",
-        );
-      },
-    );
-
-    // =====================================================
-    // SERVER ERROR
-    // =====================================================
-
-    server.on("error", (error) => {
-      console.error(
-        "❌ HTTP server error:",
-        error,
-      );
-    });
-
-    // =====================================================
-    // GRACEFUL SHUTDOWN
-    // =====================================================
-
-    const gracefulShutdown = async (signal) => {
-      console.log(
-        `\n🛑 ${signal} received. Shutting down gracefully...`,
-      );
-
-      if (server) {
-        server.close(async () => {
-          console.log("✅ HTTP server closed");
-
-          try {
-            await pool.end();
-
-            console.log(
-              "✅ PostgreSQL connection pool closed",
-            );
-
-            process.exit(0);
-          } catch (error) {
-            console.error(
-              "❌ Error closing PostgreSQL pool:",
-              error,
-            );
-
-            process.exit(1);
-          }
-        });
-      } else {
-        try {
-          await pool.end();
-        } catch (error) {
-          console.error(
-            "❌ Error closing PostgreSQL pool:",
-            error,
-          );
-        }
-
-        process.exit(0);
-      }
-    };
-
-    process.on(
-      "SIGTERM",
-      () => gracefulShutdown("SIGTERM"),
-    );
-
-    process.on(
-      "SIGINT",
-      () => gracefulShutdown("SIGINT"),
-    );
-  } catch (error) {
-    console.error(
-      "❌ Failed to start server:",
-      error,
-    );
-
-    process.exit(1);
-  }
-};
-
-// =========================================================
-// START ONLY WHEN RUN DIRECTLY
-// =========================================================
-
-if (require.main === module) {
-  startServer();
-}
-
-// =========================================================
-// EXPORTS
-// =========================================================
-
-module.exports = {
-  app,
-  server,
-  startupPromise,
-};// backend/src/server.js
-
-require("dotenv").config();
-
-const { validateProductionConfig } = require("./config/production");
-
-validateProductionConfig();
-
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const morgan = require("morgan");
-
-const { pool } = require("./config/database");
-const { errorHandler } = require("./middleware/errorHandler");
-const { runMigrations } = require("./migrations/run");
-
-// =========================================================
-// FIREBASE ADMIN
-// =========================================================
-
-let firebaseAdminLoaded = false;
-let admin = null;
-
-try {
-  console.log("🔄 Loading Firebase Admin...");
-
-  const firebaseAdmin = require("./config/firebase-admin");
-
-  if (
-    firebaseAdmin &&
-    firebaseAdmin.admin &&
-    firebaseAdmin.firebaseApp
-  ) {
-    admin = firebaseAdmin.admin;
-    firebaseAdminLoaded = true;
-
-    console.log("✅ Firebase Admin loaded successfully");
-    console.log(`📦 admin.auth type: ${typeof admin.auth}`);
-  } else {
-    console.warn(
-      "⚠️ Firebase Admin initialization failed - continuing without it",
-    );
-  }
-} catch (error) {
-  console.warn(
-    "⚠️ Firebase Admin not available:",
-    error.message,
-  );
-}
-
-// =========================================================
-// ROUTES
-// =========================================================
-
-const tournamentRoutes = require("./routes/tournament.routes");
-const walletRoutes = require("./routes/wallet.routes");
-const webhookRoutes = require("./routes/webhook.routes");
-const userRoutes = require("./routes/user.routes");
-const apiV1Routes = require("./routes/api-v1");
-const authRoutes = require("./routes/auth.routes");
-
-// =========================================================
-// APP
-// =========================================================
-
-const app = express();
-
-const PORT = Number(process.env.PORT || 5000);
-
-const PUBLIC_BACKEND_URL =
-  process.env.BACKEND_URL ||
-  `http://localhost:${PORT}`;
-
-// =========================================================
-// CORS CONFIGURATION
-// =========================================================
-
-const configuredCorsOrigins = String(
-  process.env.CORS_ORIGINS || "",
-)
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-const corsOrigins =
-  configuredCorsOrigins.length > 0
-    ? configuredCorsOrigins
-    : process.env.NODE_ENV === "production"
-      ? []
-      : [
-          "http://localhost:3000",
-          "http://localhost:8081",
-        ];
-
-app.set("trust proxy", 1);
-
-// =========================================================
-// DATABASE MIGRATIONS
-// =========================================================
-
-const startupPromise = runMigrations().catch((error) => {
-  console.error("❌ Startup migration failed:", error);
-  throw error;
-});
-
-app.use(async (req, res, next) => {
-  try {
-    await startupPromise;
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
-// =========================================================
-// SECURITY
-// =========================================================
-
-app.use(
-  helmet({
-    contentSecurityPolicy: false,
-  }),
-);
-
-// =========================================================
-// CORS
-// =========================================================
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests without an Origin header.
-      // This includes server-to-server/webhook requests.
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      if (corsOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(
-        new Error("Origin is not allowed by CORS"),
-      );
-    },
-
-    credentials: true,
-
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
-
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "Accept",
-      "X-Zapupi-Signature",
-    ],
-  }),
-);
-
-// =========================================================
-// LOGGER
-// =========================================================
-
-app.use(morgan("combined"));
-
-// =========================================================
-// REQUEST DEBUG
-// =========================================================
-
-app.use((req, res, next) => {
-  console.log("\n========================================");
-  console.log("📥 REQUEST");
-  console.log("========================================");
-
-  console.log("METHOD:", req.method);
-  console.log("URL:", req.originalUrl);
-
-  console.log(
-    "CONTENT-TYPE:",
-    JSON.stringify(req.headers["content-type"]),
-  );
-
-  console.log(
-    "CONTENT-ENCODING:",
-    JSON.stringify(req.headers["content-encoding"]),
-  );
-
-  console.log(
-    "CONTENT-LENGTH:",
-    JSON.stringify(req.headers["content-length"]),
-  );
-
-  console.log(
-    "AUTHORIZATION:",
-    req.headers.authorization
-      ? "Bearer token present"
-      : "No authorization header",
-  );
-
-  console.log("========================================\n");
-
-  next();
-});
-
-// =========================================================
-// BODY PARSER
-// =========================================================
-//
-// Custom JSON parser is kept because webhook/payment
-// requests may need predictable body handling.
-//
-
-app.use((req, res, next) => {
-  if (
-    req.method === "GET" ||
-    req.method === "HEAD" ||
-    req.method === "OPTIONS"
-  ) {
-    return next();
-  }
-
-  const contentType = String(
-    req.headers["content-type"] || "",
-  ).toLowerCase();
-
-  // Only manually parse JSON requests.
-  if (
-    !contentType.startsWith("application/json") &&
-    !contentType.includes("+json")
-  ) {
-    return next();
-  }
-
-  let body = "";
-  let done = false;
-
-  req.setEncoding("utf8");
-
-  req.on("data", (chunk) => {
-    if (done) return;
-
-    body += chunk;
-
-    // Maximum request body size: 10 MB
-    if (
-      Buffer.byteLength(body, "utf8") >
-      10 * 1024 * 1024
-    ) {
-      done = true;
-
-      return res.status(413).json({
-        success: false,
-        error: "Request body too large",
-      });
-    }
-  });
-
-  req.on("end", () => {
-    if (done) return;
-
-    done = true;
-
-    if (!body.trim()) {
-      req.body = {};
-      return next();
-    }
-
-    try {
-      req.body = JSON.parse(body);
-      next();
-    } catch (err) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid JSON body",
-        detail: err.message,
-      });
-    }
-  });
-
-  req.on("error", (err) => {
-    if (done) return;
-
-    done = true;
-
-    return res.status(400).json({
-      success: false,
-      error: "Failed to read request body",
-      detail: err.message,
-    });
-  });
-});
-
-// =========================================================
-// URL ENCODED BODY
-// =========================================================
-
-app.use(
-  express.urlencoded({
-    extended: true,
-    limit: "10mb",
-  }),
-);
-
-// =========================================================
-// API ROUTES
-// =========================================================
-
-app.use("/api/auth", authRoutes);
-
-app.use("/api/wallet", walletRoutes);
-
-app.use("/api/webhooks", webhookRoutes);
-
-app.use("/api/user", userRoutes);
-
-app.use("/api/tournaments", tournamentRoutes);
-
-app.use("/api/v1", apiV1Routes);
-
-// =========================================================
-// API ROOT
-// =========================================================
-
-app.get("/api", (req, res) => {
-  return res.status(200).json({
-    success: true,
-    service: "battlenexus-api",
-    version: "v1",
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// =========================================================
-// HEALTH CHECK
-// =========================================================
-
-app.get("/api/health", async (req, res) => {
-  try {
-    await pool.query("SELECT 1");
-
-    return res.status(200).json({
-      success: true,
-      status: "healthy",
-      environment:
-        process.env.NODE_ENV || "development",
-
-      timestamp: new Date().toISOString(),
-
-      firebaseAdmin: firebaseAdminLoaded,
-
-      database: "connected",
-
-      zapupi: {
-        mode:
-          process.env.ZAPUPI_MODE ||
-          "not configured",
-
-        apiKey:
-          process.env.ZAPUPI_API_KEY
-            ? "configured"
-            : "missing",
-
-        apiBase:
-          process.env.ZAPUPI_API_BASE ||
-          "https://pay.zapupi.com/api",
-      },
-    });
-  } catch (error) {
-    console.error(
-      "❌ Health check database error:",
-      error,
-    );
-
-    return res.status(503).json({
-      success: false,
-      status: "unhealthy",
-      error: "Database connection failed",
-      database: "disconnected",
-    });
-  }
-});
-
-// =========================================================
-// SHORT HEALTH ROUTE
-// =========================================================
-
-app.get("/health", async (req, res) => {
-  return res.redirect(307, "/api/health");
-});
-
-// =========================================================
-// 404 HANDLER
-// =========================================================
-
-app.use((req, res) => {
-  console.log(
-    `❌ 404 ROUTE NOT FOUND: ${req.method} ${req.originalUrl}`,
-  );
-
-  return res.status(404).json({
-    success: false,
-    error: "Route not found",
-    path: req.originalUrl,
-    method: req.method,
-  });
-});
-
-// =========================================================
-// GLOBAL ERROR HANDLER
-// =========================================================
-
-app.use(errorHandler);
-
-// =========================================================
-// START SERVER
-// =========================================================
-
-let server;
-
-const startServer = async () => {
-  try {
-    // Make absolutely sure migrations have completed
-    // before accepting requests.
-    await startupPromise;
-
-    server = app.listen(
-      PORT,
-      "0.0.0.0",
-      () => {
-        console.log(
-          "\n========================================",
-        );
-
-        console.log("🚀 BATTLE NEXUS BACKEND");
-
-        console.log(
-          "========================================",
-        );
-
-        console.log(
-          `🚀 Server running on port ${PORT}`,
-        );
-
-        console.log(
-          `📍 Environment: ${
-            process.env.NODE_ENV ||
-            "development"
-          }`,
+          "🗄️ PostgreSQL: ✅ Ready",
         );
 
         // =================================================
-        // ZAPUPI CONFIGURATION
-        // =================================================
-
-        console.log(
-          `💰 ZapUPI mode: ${
-            process.env.ZAPUPI_MODE ||
-            "not configured"
-          }`,
-        );
-
-        // IMPORTANT:
-        // Use ZAPUPI_API_KEY, not the old ZAPUPI_ZAP_KEY.
-        console.log(
-          `🔑 ZapUPI key: ${
-            process.env.ZAPUPI_API_KEY
-              ? "✅ Loaded"
-              : "❌ Missing"
-          }`,
-        );
-
-        console.log(
-          `🌐 ZapUPI API: ${
-            process.env.ZAPUPI_API_BASE ||
-            "https://pay.zapupi.com/api"
-          }`,
-        );
-
-        // =================================================
-        // FIREBASE
-        // =================================================
-
-        console.log(
-          `🔥 Firebase Admin: ${
-            firebaseAdminLoaded
-              ? "✅ Available"
-              : "❌ Not available"
-          }`,
-        );
-
-        // =================================================
-        // DATABASE
-        // =================================================
-
-        console.log("🗄️ PostgreSQL: ✅ Ready");
-
-        // =================================================
-        // PUBLIC URLS
+        // PUBLIC API
         // =================================================
 
         console.log(
@@ -1133,7 +557,7 @@ const startServer = async () => {
     );
 
     // =====================================================
-    // SERVER ERROR
+    // HTTP SERVER ERROR
     // =====================================================
 
     server.on("error", (error) => {
@@ -1142,60 +566,6 @@ const startServer = async () => {
         error,
       );
     });
-
-    // =====================================================
-    // GRACEFUL SHUTDOWN
-    // =====================================================
-
-    const gracefulShutdown = async (signal) => {
-      console.log(
-        `\n🛑 ${signal} received. Shutting down gracefully...`,
-      );
-
-      if (server) {
-        server.close(async () => {
-          console.log("✅ HTTP server closed");
-
-          try {
-            await pool.end();
-
-            console.log(
-              "✅ PostgreSQL connection pool closed",
-            );
-
-            process.exit(0);
-          } catch (error) {
-            console.error(
-              "❌ Error closing PostgreSQL pool:",
-              error,
-            );
-
-            process.exit(1);
-          }
-        });
-      } else {
-        try {
-          await pool.end();
-        } catch (error) {
-          console.error(
-            "❌ Error closing PostgreSQL pool:",
-            error,
-          );
-        }
-
-        process.exit(0);
-      }
-    };
-
-    process.on(
-      "SIGTERM",
-      () => gracefulShutdown("SIGTERM"),
-    );
-
-    process.on(
-      "SIGINT",
-      () => gracefulShutdown("SIGINT"),
-    );
   } catch (error) {
     console.error(
       "❌ Failed to start server:",
@@ -1207,7 +577,56 @@ const startServer = async () => {
 };
 
 // =========================================================
-// START ONLY WHEN RUN DIRECTLY
+// GRACEFUL SHUTDOWN
+// =========================================================
+
+const gracefulShutdown = async (signal) => {
+  console.log(
+    `\n🛑 ${signal} received. Shutting down gracefully...`,
+  );
+
+  try {
+    if (server) {
+      await new Promise((resolve) => {
+        server.close(() => {
+          console.log(
+            "✅ HTTP server closed",
+          );
+
+          resolve();
+        });
+      });
+    }
+
+    await pool.end();
+
+    console.log(
+      "✅ PostgreSQL connection pool closed",
+    );
+
+    process.exit(0);
+  } catch (error) {
+    console.error(
+      "❌ Error during graceful shutdown:",
+      error,
+    );
+
+    process.exit(1);
+  }
+};
+
+process.on(
+  "SIGTERM",
+  () => gracefulShutdown("SIGTERM"),
+);
+
+process.on(
+  "SIGINT",
+  () => gracefulShutdown("SIGINT"),
+);
+
+// =========================================================
+// START APPLICATION
 // =========================================================
 
 if (require.main === module) {
