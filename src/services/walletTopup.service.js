@@ -18,7 +18,9 @@ const syncFirebaseTopup = async ({
   transactionId,
   description,
 }) => {
-  if (!firebaseUid) return;
+  if (!firebaseUid) {
+    throw new Error("Firebase UID is missing; wallet sync was not performed");
+  }
 
   try {
     await updateWalletBalance(firebaseUid, balanceAfter);
@@ -42,6 +44,7 @@ const syncFirebaseTopup = async ({
       transactionId,
       error: error.message,
     });
+    throw error;
   }
 };
 

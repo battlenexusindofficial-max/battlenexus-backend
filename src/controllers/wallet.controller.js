@@ -142,13 +142,6 @@ const verifyTopup = async (req, res) => {
       return res.status(403).json({ success: false, error: "Unauthorized" });
     }
 
-    if (order.status === "successful") {
-      return res.status(200).json({
-        success: true,
-        data: { alreadyProcessed: true, status: "successful" },
-      });
-    }
-
     const verify = await getOrderStatus(order.zapupi_order_id);
 
     if (!verify.success) {

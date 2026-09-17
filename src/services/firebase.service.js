@@ -13,6 +13,15 @@ try {
   throw error;
 }
 
+let configuredFirebaseApp;
+try {
+  ({
+    firebaseApp: configuredFirebaseApp,
+  } = require("../config/firebase-admin"));
+} catch (error) {
+  console.warn("⚠️ Reusing Firebase Admin config failed:", error.message);
+}
+
 // ============================================================
 // FIREBASE ADMIN INITIALIZATION
 // ============================================================
@@ -28,6 +37,17 @@ const initializeFirebase = () => {
   try {
     if (isInitialized && firebaseApp) {
       console.log("✅ Firebase Admin already initialized");
+      return { app: firebaseApp, db: firestore };
+    }
+
+    if (configuredFirebaseApp) {
+      firebaseApp = configuredFirebaseApp;
+      firestore = admin.firestore(firebaseApp);
+      firestore.settings({
+        ignoreUndefinedProperties: true,
+      });
+      isInitialized = true;
+      console.log("✅ Reusing shared Firebase Admin app");
       return { app: firebaseApp, db: firestore };
     }
 
@@ -129,10 +149,13 @@ const updateWalletBalance = async (firebaseUid, newBalance) => {
     const { db } = getFirebaseApp();
     const userRef = db.collection("users").doc(firebaseUid);
 
-    await userRef.update({
-      walletBalance: newBalance,
-      walletUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    await userRef.set(
+      {
+        walletBalance: newBalance,
+        walletUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
 
     console.log(`✅ Wallet balance updated for user: ${firebaseUid}`);
     return true;
