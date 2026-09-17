@@ -16,7 +16,6 @@ const ipv4Agent = new https.Agent({
 // ------------------------------------------------------------
 // Environment variables
 // ------------------------------------------------------------
-
 const ZAPUPI_API_BASE =
   process.env.ZAPUPI_API_BASE || "https://pay.zapupi.com/api";
 
@@ -25,9 +24,7 @@ const BACKEND_API_URL = (
 ).replace(/\/+$/, "");
 
 const ZAPUPI_API_KEY = process.env.ZAPUPI_API_KEY || "";
-
 const ZAPUPI_MODE = process.env.ZAPUPI_MODE || "production";
-
 const ZAPUPI_TIMEOUT_MS = Number(process.env.ZAPUPI_TIMEOUT_MS) || 8000;
 
 // Remove accidental trailing slash.
@@ -44,13 +41,9 @@ const isZapupiConfigured = () => {
 const getZapupiConfigStatus = () => {
   return {
     configured: isZapupiConfigured(),
-
     mode: ZAPUPI_MODE,
-
     apiBase: NORMALIZED_ZAPUPI_API_BASE,
-
     hasApiKey: Boolean(ZAPUPI_API_KEY),
-
     timeoutMs: ZAPUPI_TIMEOUT_MS,
   };
 };
@@ -78,9 +71,7 @@ console.log(`💳 ZapUPI mode: ${ZAPUPI_MODE}`);
 // ============================================================
 
 const MIN_TOPUP_AMOUNT = 10;
-
 const MAX_TOPUP_AMOUNT = 5000;
-
 const ALLOWED_TOPUP_AMOUNTS = [10, 20, 50, 100, 200, 500, 1000, 5000];
 
 const SUCCESS_PAYMENT_STATUSES = new Set([
@@ -152,7 +143,6 @@ const createOrder = async (
     // --------------------------------------------------------
     // Configuration check
     // --------------------------------------------------------
-
     if (!ZAPUPI_API_KEY) {
       return {
         success: false,
@@ -170,7 +160,6 @@ const createOrder = async (
     // --------------------------------------------------------
     // Validate amount
     // --------------------------------------------------------
-
     if (typeof amountInMinor !== "number" || !Number.isFinite(amountInMinor)) {
       return {
         success: false,
@@ -198,30 +187,21 @@ const createOrder = async (
     // Example:
     // 10000 -> ₹100.00
     // --------------------------------------------------------
-
     const amountRupees = (amountInMinor / 100).toFixed(2);
 
     // --------------------------------------------------------
     // ZapUPI create-order payload
     // --------------------------------------------------------
-
     const payload = {
       zap_key: ZAPUPI_API_KEY,
-
       order_id: String(reference),
-
       amount: amountRupees,
-
       customer_mobile: options.mobile || undefined,
-
       remark: options.remark || undefined,
-
-      webhook_url: options.webhookUrl || `${BACKEND_API_URL}/webhooks/zapupi`,
-
+      webhook_url:
+        options.webhookUrl || `${BACKEND_API_URL}/webhooks/zapupi`,
       success_url: options.successUrl || undefined,
-
       failed_url: options.failedUrl || undefined,
-
       timeout_url: options.timeoutUrl || undefined,
     };
 
@@ -235,29 +215,22 @@ const createOrder = async (
     // --------------------------------------------------------
     // Endpoint
     // --------------------------------------------------------
-
     const endpoint = `${NORMALIZED_ZAPUPI_API_BASE}/create-order`;
 
     console.log(`💳 Creating ZapUPI order: ${reference}`);
-
     console.log(`💰 Amount: ₹${amountRupees}`);
-
     console.log(`🌐 Endpoint: ${endpoint}`);
 
     // --------------------------------------------------------
     // Request
     // --------------------------------------------------------
-
     const response = await axios.post(endpoint, payload, {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-
       timeout: ZAPUPI_TIMEOUT_MS,
-
       httpsAgent: ipv4Agent,
-
       validateStatus: () => true,
     });
 
@@ -266,10 +239,8 @@ const createOrder = async (
     // --------------------------------------------------------
     // HTTP error
     // --------------------------------------------------------
-
     if (response.status < 200 || response.status >= 300) {
       console.error("❌ ZapUPI HTTP error:", response.status, data);
-
       return {
         success: false,
         error: data?.message || `ZapUPI returned HTTP ${response.status}`,
@@ -279,7 +250,6 @@ const createOrder = async (
     // --------------------------------------------------------
     // ZapUPI response
     // --------------------------------------------------------
-
     if (data && String(data.status).toLowerCase() === "success") {
       const responseData = data.data || data;
 
@@ -306,7 +276,6 @@ const createOrder = async (
 
       if (!paymentUrl) {
         console.error("❌ ZapUPI did not return payment URL", data);
-
         return {
           success: false,
           error: "ZapUPI did not return a payment URL",
@@ -317,20 +286,13 @@ const createOrder = async (
 
       return {
         success: true,
-
         order: {
           id: String(zapupiOrderId),
-
           reference: String(reference),
-
           amount: amountInMinor,
-
           currency: currency || "INR",
-
           payment_url: paymentUrl,
-
           txn_id: transactionId,
-
           provider: "zapupi",
         },
       };
@@ -339,13 +301,12 @@ const createOrder = async (
     // --------------------------------------------------------
     // Provider returned failure
     // --------------------------------------------------------
-
     console.error("❌ ZapUPI order creation failed:", data);
 
     return {
       success: false,
-
-      error: data?.message || data?.error || "Failed to create ZapUPI order",
+      error:
+        data?.message || data?.error || "Failed to create ZapUPI order",
     };
   } catch (error) {
     console.error("❌ ZapUPI create error:", error.message);
@@ -360,7 +321,6 @@ const createOrder = async (
 
     return {
       success: false,
-
       error:
         error.response?.data?.message ||
         error.response?.data?.error ||
@@ -374,14 +334,11 @@ const createOrder = async (
 // ORDER STATUS
 // ============================================================
 
-const getOrderStatus = async (
-  orderId,
-) => {
+const getOrderStatus = async (orderId) => {
   try {
     // --------------------------------------------------------
     // Configuration check
     // --------------------------------------------------------
-
     if (!ZAPUPI_API_KEY) {
       return {
         success: false,
@@ -399,7 +356,6 @@ const getOrderStatus = async (
     // --------------------------------------------------------
     // Endpoint
     // --------------------------------------------------------
-
     const endpoint = `${NORMALIZED_ZAPUPI_API_BASE}/order-status`;
 
     console.log(`🔎 Checking ZapUPI order: ${orderId}`);
@@ -407,79 +363,32 @@ const getOrderStatus = async (
     // --------------------------------------------------------
     // Request
     // --------------------------------------------------------
-
     const response = await axios.post(
       endpoint,
-
       {
         zap_key: ZAPUPI_API_KEY,
-
         order_id: String(orderId),
       },
-
       {
         headers: {
           "Content-Type": "application/json",
-
           Accept: "application/json",
         },
-
         timeout: ZAPUPI_TIMEOUT_MS,
-
         httpsAgent: ipv4Agent,
-
         validateStatus: () => true,
       },
     );
 
-    const data =
-      response.data;
+    const data = response.data;
 
     // --------------------------------------------------------
     // HTTP error
     // --------------------------------------------------------
-
-    if (
-      response.status < 200 ||
-      response.status >= 300
-    ) {
-      console.error(
-        "❌ ZapUPI status HTTP error:",
-        response.status,
-        data
-      );
-
-      return {
-        success: false,
-
-        error:
-          data?.message ||
-          `ZapUPI returned HTTP ${response.status}`,
-      };
-    }
-
-    // --------------------------------------------------------
-    // Successful response
-    // --------------------------------------------------------
-
-    if (
-      data &&
-      String(data.status).toLowerCase() ===
-        "success"
-    ) {
-      const paymentData =
-        data.data || data;
-
-    // --------------------------------------------------------
-    // HTTP error
-    // --------------------------------------------------------
-
     if (response.status < 200 || response.status >= 300) {
       console.error("❌ ZapUPI status HTTP error:", response.status, data);
-
       return {
         success: false,
-
         error: data?.message || `ZapUPI returned HTTP ${response.status}`,
       };
     }
@@ -487,8 +396,9 @@ const getOrderStatus = async (
     // --------------------------------------------------------
     // Successful response
     // --------------------------------------------------------
-
+    // ✅ Declared only ONCE
     const paymentData = data?.data || data;
+
     if (
       data &&
       (isSuccessfulPaymentStatus(data.status) ||
@@ -497,7 +407,6 @@ const getOrderStatus = async (
     ) {
       return {
         success: true,
-
         payment: {
           status: String(
             paymentData.status ||
@@ -538,7 +447,6 @@ const getOrderStatus = async (
 
     return {
       success: false,
-
       error: data?.message || data?.error || "Failed to fetch order status",
     };
   } catch (error) {
@@ -550,7 +458,6 @@ const getOrderStatus = async (
 
     return {
       success: false,
-
       error:
         error.response?.data?.message ||
         error.response?.data?.error ||
@@ -653,29 +560,17 @@ const isExpectedEnvironment = (providerEnvironment) => {
 
 module.exports = {
   MIN_TOPUP_AMOUNT,
-
   MAX_TOPUP_AMOUNT,
-
   ALLOWED_TOPUP_AMOUNTS,
-
   validateTopupAmount,
-
   createOrder,
-
   getOrderStatus,
-
   normalizeWebhook,
-
   isTestWebhook,
-
   isExpectedEnvironment,
   isSuccessfulPaymentStatus,
-
   isZapupiConfigured,
-
   getZapupiConfigStatus,
-
   ZAPUPI_API_BASE: NORMALIZED_ZAPUPI_API_BASE,
-
   ZAPUPI_ENVIRONMENT: ZAPUPI_MODE,
 };
