@@ -20,28 +20,25 @@ const ipv4Agent = new https.Agent({
 const ZAPUPI_API_BASE =
   process.env.ZAPUPI_API_BASE || "https://pay.zapupi.com/api";
 
-const ZAPUPI_API_KEY =
-  process.env.ZAPUPI_API_KEY || "";
+const BACKEND_API_URL = (
+  process.env.BACKEND_URL || "https://battlenexus-backend.onrender.com/api"
+).replace(/\/+$/, "");
 
-const ZAPUPI_MODE =
-  process.env.ZAPUPI_MODE || "production";
+const ZAPUPI_API_KEY = process.env.ZAPUPI_API_KEY || "";
 
-const ZAPUPI_TIMEOUT_MS =
-  Number(process.env.ZAPUPI_TIMEOUT_MS) || 8000;
+const ZAPUPI_MODE = process.env.ZAPUPI_MODE || "production";
+
+const ZAPUPI_TIMEOUT_MS = Number(process.env.ZAPUPI_TIMEOUT_MS) || 8000;
 
 // Remove accidental trailing slash.
-const NORMALIZED_ZAPUPI_API_BASE =
-  ZAPUPI_API_BASE.replace(/\/+$/, "");
+const NORMALIZED_ZAPUPI_API_BASE = ZAPUPI_API_BASE.replace(/\/+$/, "");
 
 // ============================================================
 // CONFIGURATION STATUS
 // ============================================================
 
 const isZapupiConfigured = () => {
-  return Boolean(
-    ZAPUPI_API_KEY &&
-      NORMALIZED_ZAPUPI_API_BASE
-  );
+  return Boolean(ZAPUPI_API_KEY && NORMALIZED_ZAPUPI_API_BASE);
 };
 
 const getZapupiConfigStatus = () => {
@@ -65,24 +62,16 @@ const getZapupiConfigStatus = () => {
 if (ZAPUPI_API_KEY) {
   console.log("ZapUPI key: ✅ Configured");
 } else {
-  console.error(
-    "ZapUPI key: ❌ Missing"
-  );
+  console.error("ZapUPI key: ❌ Missing");
 }
 
 if (NORMALIZED_ZAPUPI_API_BASE) {
-  console.log(
-    `🌐 ZapUPI API: ${NORMALIZED_ZAPUPI_API_BASE}`
-  );
+  console.log(`🌐 ZapUPI API: ${NORMALIZED_ZAPUPI_API_BASE}`);
 } else {
-  console.error(
-    "🌐 ZapUPI API: ❌ Not configured"
-  );
+  console.error("🌐 ZapUPI API: ❌ Not configured");
 }
 
-console.log(
-  `💳 ZapUPI mode: ${ZAPUPI_MODE}`
-);
+console.log(`💳 ZapUPI mode: ${ZAPUPI_MODE}`);
 
 // ============================================================
 // CONSTANTS
@@ -92,26 +81,31 @@ const MIN_TOPUP_AMOUNT = 10;
 
 const MAX_TOPUP_AMOUNT = 5000;
 
-const ALLOWED_TOPUP_AMOUNTS = [
-  10,
-  20,
-  50,
-  100,
-  200,
-  500,
-  1000,
-  5000,
-];
+const ALLOWED_TOPUP_AMOUNTS = [10, 20, 50, 100, 200, 500, 1000, 5000];
+
+const SUCCESS_PAYMENT_STATUSES = new Set([
+  "success",
+  "successful",
+  "paid",
+  "completed",
+  "complete",
+  "captured",
+  "settled",
+]);
+
+const isSuccessfulPaymentStatus = (status) =>
+  SUCCESS_PAYMENT_STATUSES.has(
+    String(status || "")
+      .trim()
+      .toLowerCase(),
+  );
 
 // ============================================================
 // VALIDATION
 // ============================================================
 
 const validateTopupAmount = (amount) => {
-  if (
-    typeof amount !== "number" ||
-    !Number.isFinite(amount)
-  ) {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) {
     return {
       valid: false,
       error: "Amount must be a valid number",
@@ -177,10 +171,7 @@ const createOrder = async (
     // Validate amount
     // --------------------------------------------------------
 
-    if (
-      typeof amountInMinor !== "number" ||
-      !Number.isFinite(amountInMinor)
-    ) {
+    if (typeof amountInMinor !== "number" || !Number.isFinite(amountInMinor)) {
       return {
         success: false,
         error: "Invalid payment amount",
@@ -208,8 +199,7 @@ const createOrder = async (
     // 10000 -> ₹100.00
     // --------------------------------------------------------
 
-    const amountRupees =
-      (amountInMinor / 100).toFixed(2);
+    const amountRupees = (amountInMinor / 100).toFixed(2);
 
     // --------------------------------------------------------
     // ZapUPI create-order payload
@@ -222,23 +212,17 @@ const createOrder = async (
 
       amount: amountRupees,
 
-      customer_mobile:
-        options.mobile || undefined,
+      customer_mobile: options.mobile || undefined,
 
-      remark:
-        options.remark || undefined,
+      remark: options.remark || undefined,
 
-      webhook_url:
-        options.webhookUrl || undefined,
+      webhook_url: options.webhookUrl || `${BACKEND_API_URL}/webhooks/zapupi`,
 
-      success_url:
-        options.successUrl || undefined,
+      success_url: options.successUrl || undefined,
 
-      failed_url:
-        options.failedUrl || undefined,
+      failed_url: options.failedUrl || undefined,
 
-      timeout_url:
-        options.timeoutUrl || undefined,
+      timeout_url: options.timeoutUrl || undefined,
     };
 
     // Remove undefined properties.
@@ -252,43 +236,30 @@ const createOrder = async (
     // Endpoint
     // --------------------------------------------------------
 
-    const endpoint =
-      `${NORMALIZED_ZAPUPI_API_BASE}/create-order`;
+    const endpoint = `${NORMALIZED_ZAPUPI_API_BASE}/create-order`;
 
-    console.log(
-      `💳 Creating ZapUPI order: ${reference}`
-    );
+    console.log(`💳 Creating ZapUPI order: ${reference}`);
 
-    console.log(
-      `💰 Amount: ₹${amountRupees}`
-    );
+    console.log(`💰 Amount: ₹${amountRupees}`);
 
-    console.log(
-      `🌐 Endpoint: ${endpoint}`
-    );
+    console.log(`🌐 Endpoint: ${endpoint}`);
 
     // --------------------------------------------------------
     // Request
     // --------------------------------------------------------
 
-    const response = await axios.post(
-      endpoint,
-      payload,
-      {
-        headers: {
-          "Content-Type":
-            "application/json",
-          Accept:
-            "application/json",
-        },
-
-        timeout: ZAPUPI_TIMEOUT_MS,
-
-        httpsAgent: ipv4Agent,
-
-        validateStatus: () => true,
+    const response = await axios.post(endpoint, payload, {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-    );
+
+      timeout: ZAPUPI_TIMEOUT_MS,
+
+      httpsAgent: ipv4Agent,
+
+      validateStatus: () => true,
+    });
 
     const data = response.data;
 
@@ -296,21 +267,12 @@ const createOrder = async (
     // HTTP error
     // --------------------------------------------------------
 
-    if (
-      response.status < 200 ||
-      response.status >= 300
-    ) {
-      console.error(
-        "❌ ZapUPI HTTP error:",
-        response.status,
-        data
-      );
+    if (response.status < 200 || response.status >= 300) {
+      console.error("❌ ZapUPI HTTP error:", response.status, data);
 
       return {
         success: false,
-        error:
-          data?.message ||
-          `ZapUPI returned HTTP ${response.status}`,
+        error: data?.message || `ZapUPI returned HTTP ${response.status}`,
       };
     }
 
@@ -318,13 +280,8 @@ const createOrder = async (
     // ZapUPI response
     // --------------------------------------------------------
 
-    if (
-      data &&
-      String(data.status).toLowerCase() ===
-        "success"
-    ) {
-      const responseData =
-        data.data || data;
+    if (data && String(data.status).toLowerCase() === "success") {
+      const responseData = data.data || data;
 
       const zapupiOrderId =
         data.order_id ||
@@ -348,21 +305,15 @@ const createOrder = async (
         null;
 
       if (!paymentUrl) {
-        console.error(
-          "❌ ZapUPI did not return payment URL",
-          data
-        );
+        console.error("❌ ZapUPI did not return payment URL", data);
 
         return {
           success: false,
-          error:
-            "ZapUPI did not return a payment URL",
+          error: "ZapUPI did not return a payment URL",
         };
       }
 
-      console.log(
-        `✅ ZapUPI order created: ${zapupiOrderId}`
-      );
+      console.log(`✅ ZapUPI order created: ${zapupiOrderId}`);
 
       return {
         success: true,
@@ -374,13 +325,11 @@ const createOrder = async (
 
           amount: amountInMinor,
 
-          currency:
-            currency || "INR",
+          currency: currency || "INR",
 
           payment_url: paymentUrl,
 
-          txn_id:
-            transactionId,
+          txn_id: transactionId,
 
           provider: "zapupi",
         },
@@ -391,37 +340,22 @@ const createOrder = async (
     // Provider returned failure
     // --------------------------------------------------------
 
-    console.error(
-      "❌ ZapUPI order creation failed:",
-      data
-    );
+    console.error("❌ ZapUPI order creation failed:", data);
 
     return {
       success: false,
 
-      error:
-        data?.message ||
-        data?.error ||
-        "Failed to create ZapUPI order",
+      error: data?.message || data?.error || "Failed to create ZapUPI order",
     };
   } catch (error) {
-    console.error(
-      "❌ ZapUPI create error:",
-      error.message
-    );
+    console.error("❌ ZapUPI create error:", error.message);
 
     if (error.response) {
-      console.error(
-        "ZapUPI response:",
-        error.response.data
-      );
+      console.error("ZapUPI response:", error.response.data);
     }
 
     if (error.code) {
-      console.error(
-        "ZapUPI error code:",
-        error.code
-      );
+      console.error("ZapUPI error code:", error.code);
     }
 
     return {
@@ -451,16 +385,14 @@ const getOrderStatus = async (
     if (!ZAPUPI_API_KEY) {
       return {
         success: false,
-        error:
-          "ZapUPI API key is not configured",
+        error: "ZapUPI API key is not configured",
       };
     }
 
     if (!orderId) {
       return {
         success: false,
-        error:
-          "ZapUPI order ID is required",
+        error: "ZapUPI order ID is required",
       };
     }
 
@@ -468,12 +400,9 @@ const getOrderStatus = async (
     // Endpoint
     // --------------------------------------------------------
 
-    const endpoint =
-      `${NORMALIZED_ZAPUPI_API_BASE}/order-status`;
+    const endpoint = `${NORMALIZED_ZAPUPI_API_BASE}/order-status`;
 
-    console.log(
-      `🔎 Checking ZapUPI order: ${orderId}`
-    );
+    console.log(`🔎 Checking ZapUPI order: ${orderId}`);
 
     // --------------------------------------------------------
     // Request
@@ -483,27 +412,21 @@ const getOrderStatus = async (
       endpoint,
 
       {
-        zap_key:
-          ZAPUPI_API_KEY,
+        zap_key: ZAPUPI_API_KEY,
 
-        order_id:
-          String(orderId),
+        order_id: String(orderId),
       },
 
       {
         headers: {
-          "Content-Type":
-            "application/json",
+          "Content-Type": "application/json",
 
-          Accept:
-            "application/json",
+          Accept: "application/json",
         },
 
-        timeout:
-          ZAPUPI_TIMEOUT_MS,
+        timeout: ZAPUPI_TIMEOUT_MS,
 
-        httpsAgent:
-          ipv4Agent,
+        httpsAgent: ipv4Agent,
 
         validateStatus: () => true,
       },
@@ -547,55 +470,68 @@ const getOrderStatus = async (
       const paymentData =
         data.data || data;
 
+    // --------------------------------------------------------
+    // HTTP error
+    // --------------------------------------------------------
+
+    if (response.status < 200 || response.status >= 300) {
+      console.error("❌ ZapUPI status HTTP error:", response.status, data);
+
+      return {
+        success: false,
+
+        error: data?.message || `ZapUPI returned HTTP ${response.status}`,
+      };
+    }
+
+    // --------------------------------------------------------
+    // Successful response
+    // --------------------------------------------------------
+
+    const paymentData = data?.data || data;
+    if (
+      data &&
+      (isSuccessfulPaymentStatus(data.status) ||
+        isSuccessfulPaymentStatus(paymentData?.status) ||
+        isSuccessfulPaymentStatus(paymentData?.payment_status))
+    ) {
       return {
         success: true,
 
         payment: {
-          status:
-            String(
-              paymentData.status ||
-                "",
-            ).trim(),
+          status: String(
+            paymentData.status ||
+              paymentData.payment_status ||
+              paymentData.paymentStatus ||
+              "",
+          ).trim(),
 
-          order_id:
-            String(
-              paymentData.order_id ||
-                paymentData.orderId ||
-                orderId ||
-                "",
-            ).trim(),
+          order_id: String(
+            paymentData.order_id || paymentData.orderId || orderId || "",
+          ).trim(),
 
-          txn_id:
-            String(
-              paymentData.txn_id ||
-                paymentData.txnId ||
-                "",
-            ).trim(),
-
-          amount:
-            String(
-              paymentData.amount ||
-                "",
-            ).trim(),
-
-          pay_amount:
-            String(
-              paymentData.pay_amount ||
-                paymentData.payAmount ||
-                "",
-            ).trim(),
-
-          utr:
-            String(
+          txn_id: String(
+            paymentData.txn_id ||
+              paymentData.txnId ||
+              paymentData.transaction_id ||
+              paymentData.transactionId ||
+              paymentData.payment_id ||
+              paymentData.paymentId ||
               paymentData.utr ||
-                "",
-            ).trim(),
+              "",
+          ).trim(),
 
-          environment:
-            String(
-              paymentData.environment ||
-                "",
-            ).trim(),
+          amount: String(
+            paymentData.amount || paymentData.pay_amount || "",
+          ).trim(),
+
+          pay_amount: String(
+            paymentData.pay_amount || paymentData.payAmount || "",
+          ).trim(),
+
+          utr: String(paymentData.utr || "").trim(),
+
+          environment: String(paymentData.environment || "").trim(),
         },
       };
     }
@@ -603,22 +539,13 @@ const getOrderStatus = async (
     return {
       success: false,
 
-      error:
-        data?.message ||
-        data?.error ||
-        "Failed to fetch order status",
+      error: data?.message || data?.error || "Failed to fetch order status",
     };
   } catch (error) {
-    console.error(
-      "❌ ZapUPI status error:",
-      error.message
-    );
+    console.error("❌ ZapUPI status error:", error.message);
 
     if (error.response) {
-      console.error(
-        "ZapUPI response:",
-        error.response.data
-      );
+      console.error("ZapUPI response:", error.response.data);
     }
 
     return {
@@ -637,75 +564,42 @@ const getOrderStatus = async (
 // WEBHOOK NORMALIZATION
 // ============================================================
 
-const normalizeWebhook = (
-  body,
-) => {
+const normalizeWebhook = (body) => {
   return {
-    order_id:
-      String(
-        body?.order_id ||
-          body?.orderId ||
-          "",
-      ).trim(),
+    order_id: String(body?.order_id || body?.orderId || "").trim(),
 
-    txn_id:
-      String(
-        body?.txn_id ||
-          body?.txnId ||
-          "",
-      ).trim(),
-
-    status:
-      String(
-        body?.status ||
-          "",
-      ).trim(),
-
-    amount:
-      String(
-        body?.amount ||
-          "",
-      ).trim(),
-
-    pay_amount:
-      String(
-        body?.pay_amount ||
-          body?.payAmount ||
-          "",
-      ).trim(),
-
-    utr:
-      String(
+    txn_id: String(
+      body?.txn_id ||
+        body?.txnId ||
+        body?.transaction_id ||
+        body?.transactionId ||
+        body?.payment_id ||
+        body?.paymentId ||
         body?.utr ||
-          "",
-      ).trim(),
+        "",
+    ).trim(),
 
-    customer_mobile:
-      String(
-        body?.customer_mobile ||
-          body?.customerMobile ||
-          "",
-      ).trim(),
+    status: String(
+      body?.status || body?.payment_status || body?.paymentStatus || "",
+    ).trim(),
 
-    remark:
-      String(
-        body?.remark ||
-          "",
-      ).trim(),
+    amount: String(body?.amount || body?.pay_amount || "").trim(),
 
-    environment:
-      String(
-        body?.environment ||
-          "",
-      ).trim(),
+    pay_amount: String(body?.pay_amount || body?.payAmount || "").trim(),
 
-    create_at:
-      String(
-        body?.create_at ||
-          body?.created_at ||
-          body?.createdAt ||
-          "",
-      ).trim(),
+    utr: String(body?.utr || "").trim(),
+
+    customer_mobile: String(
+      body?.customer_mobile || body?.customerMobile || "",
+    ).trim(),
+
+    remark: String(body?.remark || "").trim(),
+
+    environment: String(body?.environment || "").trim(),
+
+    create_at: String(
+      body?.create_at || body?.created_at || body?.createdAt || "",
+    ).trim(),
   };
 };
 
@@ -713,51 +607,28 @@ const normalizeWebhook = (
 // TEST WEBHOOK DETECTION
 // ============================================================
 
-const isTestWebhook = (
-  payload,
-) => {
-  const environment =
-    String(
-      payload?.environment ||
-        "",
-    )
-      .trim()
-      .toLowerCase();
+const isTestWebhook = (payload) => {
+  const environment = String(payload?.environment || "")
+    .trim()
+    .toLowerCase();
 
-  const txnId =
-    String(
-      payload?.txn_id ||
-        "",
-    ).trim();
+  const txnId = String(payload?.txn_id || "").trim();
 
-  return (
-    environment === "test" ||
-    txnId.startsWith("DUMMY")
-  );
+  return environment === "test" || txnId.startsWith("DUMMY");
 };
 
 // ============================================================
 // ENVIRONMENT VALIDATION
 // ============================================================
 
-const isExpectedEnvironment = (
-  providerEnvironment,
-) => {
-  const expected =
-    String(
-      ZAPUPI_MODE ||
-        "",
-    )
-      .trim()
-      .toLowerCase();
+const isExpectedEnvironment = (providerEnvironment) => {
+  const expected = String(ZAPUPI_MODE || "")
+    .trim()
+    .toLowerCase();
 
-  const received =
-    String(
-      providerEnvironment ||
-        "",
-    )
-      .trim()
-      .toLowerCase();
+  const received = String(providerEnvironment || "")
+    .trim()
+    .toLowerCase();
 
   // If provider doesn't send environment,
   // don't reject solely because it is absent.
@@ -765,15 +636,8 @@ const isExpectedEnvironment = (
     return true;
   }
 
-  if (
-    expected === "production" ||
-    expected === "live"
-  ) {
-    return [
-      "production",
-      "live",
-      "cashier",
-    ].includes(received);
+  if (expected === "production" || expected === "live") {
+    return ["production", "live", "cashier"].includes(received);
   }
 
   if (expected === "test") {
@@ -805,14 +669,13 @@ module.exports = {
   isTestWebhook,
 
   isExpectedEnvironment,
+  isSuccessfulPaymentStatus,
 
   isZapupiConfigured,
 
   getZapupiConfigStatus,
 
-  ZAPUPI_API_BASE:
-    NORMALIZED_ZAPUPI_API_BASE,
+  ZAPUPI_API_BASE: NORMALIZED_ZAPUPI_API_BASE,
 
-  ZAPUPI_ENVIRONMENT:
-    ZAPUPI_MODE,
+  ZAPUPI_ENVIRONMENT: ZAPUPI_MODE,
 };

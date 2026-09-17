@@ -14,7 +14,10 @@ const pool = new Pool({
   ...databaseConfig,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: parseInt(
+    process.env.DB_CONNECTION_TIMEOUT_MS || "10000",
+    10,
+  ),
   ssl:
     process.env.NODE_ENV === "production"
       ? { rejectUnauthorized: false }

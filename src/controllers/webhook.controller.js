@@ -5,8 +5,12 @@ const {
   getOrderStatus,
   normalizeWebhook,
   isExpectedEnvironment,
+  isSuccessfulPaymentStatus,
 } = require("../services/zapupi.service");
-const { processTopup } = require("../services/walletTopup.service");
+const {
+  processTopup,
+  recordFailedTopup,
+} = require("../services/walletTopup.service");
 const { logger } = require("../utils/logger");
 
 const handleZapUPIWebhook = async (req, res) => {
@@ -24,7 +28,7 @@ const handleZapUPIWebhook = async (req, res) => {
       return res.status(400).json({ status: "error" });
     }
 
-    if (payload.status.toLowerCase() === "success" && !payload.txn_id) {
+    if (isSuccessfulPaymentStatus(payload.status) && !payload.txn_id) {
       logger.warn("WEBHOOK_INVALID_PAYLOAD", {
         ...metadata,
         reason: "missing transaction ID",
@@ -108,10 +112,16 @@ const handleZapUPIWebhook = async (req, res) => {
       } finally {
         client.release();
       }
+      await recordFailedTopup({
+        zapupiOrderId: dbOrder.zapupi_order_id,
+        userId: dbOrder.user_id,
+        providerStatus: payload.status,
+        reason: "Payment was not completed by ZapUPI",
+      });
       return ok();
     }
 
-    if (payload.status.toLowerCase() !== "success") {
+    if (!isSuccessfulPaymentStatus(payload.status)) {
       return ok();
     }
 
@@ -140,7 +150,7 @@ const handleZapUPIWebhook = async (req, res) => {
 
     if (
       verify.payment.order_id !== dbOrder.zapupi_order_id ||
-      verify.payment.status.toLowerCase() !== "success" ||
+      !isSuccessfulPaymentStatus(verify.payment.status) ||
       verify.payment.txn_id !== payload.txn_id ||
       !isExpectedEnvironment(verify.payment.environment)
     ) {

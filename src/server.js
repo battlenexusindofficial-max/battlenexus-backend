@@ -6,9 +6,7 @@ require("dotenv").config();
 // PRODUCTION CONFIGURATION
 // =========================================================
 
-const {
-  validateProductionConfig,
-} = require("./config/production");
+const { validateProductionConfig } = require("./config/production");
 
 validateProductionConfig();
 
@@ -85,16 +83,13 @@ const app = express();
 const PORT = Number(process.env.PORT || 5000);
 
 const PUBLIC_BACKEND_URL =
-  process.env.BACKEND_URL ||
-  `http://localhost:${PORT}`;
+  process.env.BACKEND_URL || `http://localhost:${PORT}`;
 
 // =========================================================
 // CORS
 // =========================================================
 
-const configuredCorsOrigins = String(
-  process.env.CORS_ORIGINS || "",
-)
+const configuredCorsOrigins = String(process.env.CORS_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -104,10 +99,7 @@ const corsOrigins =
     ? configuredCorsOrigins
     : process.env.NODE_ENV === "production"
       ? []
-      : [
-          "http://localhost:3000",
-          "http://localhost:8081",
-        ];
+      : ["http://localhost:3000", "http://localhost:8081"];
 
 app.set("trust proxy", 1);
 
@@ -115,16 +107,11 @@ app.set("trust proxy", 1);
 // DATABASE MIGRATIONS
 // =========================================================
 
-const startupPromise = runMigrations().catch(
-  (error) => {
-    console.error(
-      "❌ Startup migration failed:",
-      error,
-    );
+const startupPromise = runMigrations().catch((error) => {
+  console.error("❌ Startup migration failed:", error);
 
-    throw error;
-  },
-);
+  throw error;
+});
 
 // Make sure migrations finish before processing requests.
 app.use(async (req, res, next) => {
@@ -163,6 +150,10 @@ app.use(
         return callback(null, true);
       }
 
+      if (corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
       return callback(
         new Error("Origin is not allowed by CORS"),
       );
@@ -170,14 +161,7 @@ app.use(
 
     credentials: true,
 
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 
     allowedHeaders: [
       "Content-Type",
@@ -206,10 +190,7 @@ app.use((req, res, next) => {
   console.log("METHOD:", req.method);
   console.log("URL:", req.originalUrl);
 
-  console.log(
-    "CONTENT-TYPE:",
-    JSON.stringify(req.headers["content-type"]),
-  );
+  console.log("CONTENT-TYPE:", JSON.stringify(req.headers["content-type"]));
 
   console.log(
     "CONTENT-ENCODING:",
@@ -224,6 +205,8 @@ app.use((req, res, next) => {
       req.headers["content-length"],
     ),
   );
+
+  console.log("CONTENT-LENGTH:", JSON.stringify(req.headers["content-length"]));
 
   console.log(
     "AUTHORIZATION:",
@@ -277,10 +260,7 @@ app.use((req, res, next) => {
 
     body += chunk;
 
-    if (
-      Buffer.byteLength(body, "utf8") >
-      10 * 1024 * 1024
-    ) {
+    if (Buffer.byteLength(body, "utf8") > 10 * 1024 * 1024) {
       done = true;
 
       return res.status(413).json({
@@ -377,9 +357,7 @@ app.get("/api/health", async (req, res) => {
       success: true,
       status: "healthy",
 
-      environment:
-        process.env.NODE_ENV ||
-        "development",
+      environment: process.env.NODE_ENV || "development",
 
       timestamp: new Date().toISOString(),
 
@@ -388,18 +366,11 @@ app.get("/api/health", async (req, res) => {
       database: "connected",
 
       zapupi: {
-        mode:
-          process.env.ZAPUPI_MODE ||
-          "not configured",
+        mode: process.env.ZAPUPI_MODE || "not configured",
 
-        apiKey:
-          process.env.ZAPUPI_API_KEY
-            ? "configured"
-            : "missing",
+        apiKey: process.env.ZAPUPI_API_KEY ? "configured" : "missing",
 
-        apiBase:
-          process.env.ZAPUPI_API_BASE ||
-          "https://pay.zapupi.com/api",
+        apiBase: process.env.ZAPUPI_API_BASE || "https://pay.zapupi.com/api",
       },
     });
   } catch (error) {
@@ -462,115 +433,76 @@ const startServer = async () => {
     // Wait for database migrations.
     await startupPromise;
 
-    server = app.listen(
-      PORT,
-      "0.0.0.0",
-      () => {
-        console.log(
-          "\n========================================",
-        );
+    server = app.listen(PORT, "0.0.0.0", () => {
+      console.log("\n========================================");
 
-        console.log(
-          "🚀 BATTLE NEXUS BACKEND",
-        );
+      console.log("🚀 BATTLE NEXUS BACKEND");
 
-        console.log(
-          "========================================",
-        );
+      console.log("========================================");
 
-        console.log(
-          `🚀 Server running on port ${PORT}`,
-        );
+      console.log(`🚀 Server running on port ${PORT}`);
 
-        console.log(
-          `📍 Environment: ${
-            process.env.NODE_ENV ||
-            "development"
-          }`,
-        );
+      console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
 
-        // =================================================
-        // ZAPUPI
-        // =================================================
+      // =================================================
+      // ZAPUPI
+      // =================================================
 
-        console.log(
-          `💰 ZapUPI mode: ${
-            process.env.ZAPUPI_MODE ||
-            "not configured"
-          }`,
-        );
+      console.log(
+        `💰 ZapUPI mode: ${process.env.ZAPUPI_MODE || "not configured"}`,
+      );
 
-        // IMPORTANT:
-        // Current variable is ZAPUPI_API_KEY.
-        // Do NOT use the old ZAPUPI_ZAP_KEY here.
-        console.log(
-          `🔑 ZapUPI key: ${
-            process.env.ZAPUPI_API_KEY
-              ? "✅ Loaded"
-              : "❌ Missing"
-          }`,
-        );
+      // IMPORTANT:
+      // Current variable is ZAPUPI_API_KEY.
+      // Do NOT use the old ZAPUPI_ZAP_KEY here.
+      console.log(
+        `🔑 ZapUPI key: ${
+          process.env.ZAPUPI_API_KEY ? "✅ Loaded" : "❌ Missing"
+        }`,
+      );
 
-        console.log(
-          `🌐 ZapUPI API: ${
-            process.env.ZAPUPI_API_BASE ||
-            "https://pay.zapupi.com/api"
-          }`,
-        );
+      console.log(
+        `🌐 ZapUPI API: ${
+          process.env.ZAPUPI_API_BASE || "https://pay.zapupi.com/api"
+        }`,
+      );
 
-        // =================================================
-        // FIREBASE
-        // =================================================
+      // =================================================
+      // FIREBASE
+      // =================================================
 
-        console.log(
-          `🔥 Firebase Admin: ${
-            firebaseAdminLoaded
-              ? "✅ Available"
-              : "❌ Not available"
-          }`,
-        );
+      console.log(
+        `🔥 Firebase Admin: ${
+          firebaseAdminLoaded ? "✅ Available" : "❌ Not available"
+        }`,
+      );
 
-        // =================================================
-        // DATABASE
-        // =================================================
+      // =================================================
+      // DATABASE
+      // =================================================
 
-        console.log(
-          "🗄️ PostgreSQL: ✅ Ready",
-        );
+      console.log("🗄️ PostgreSQL: ✅ Ready");
 
-        // =================================================
-        // PUBLIC API
-        // =================================================
+      // =================================================
+      // PUBLIC API
+      // =================================================
 
-        console.log(
-          `🔗 API URL: ${PUBLIC_BACKEND_URL}/api`,
-        );
+      console.log(`🔗 API URL: ${PUBLIC_BACKEND_URL}/api`);
 
-        console.log(
-          `🔗 Health: ${PUBLIC_BACKEND_URL}/health`,
-        );
+      console.log(`🔗 Health: ${PUBLIC_BACKEND_URL}/health`);
 
-        console.log(
-          "========================================\n",
-        );
-      },
-    );
+      console.log("========================================\n");
+    });
 
     // =====================================================
     // HTTP SERVER ERROR
     // =====================================================
 
     server.on("error", (error) => {
-      console.error(
-        "❌ HTTP server error:",
-        error,
-      );
+      console.error("❌ HTTP server error:", error);
     });
   } catch (error) {
-    console.error(
-      "❌ Failed to start server:",
-      error,
-    );
+    console.error("❌ Failed to start server:", error);
 
     process.exit(1);
   }
@@ -581,17 +513,13 @@ const startServer = async () => {
 // =========================================================
 
 const gracefulShutdown = async (signal) => {
-  console.log(
-    `\n🛑 ${signal} received. Shutting down gracefully...`,
-  );
+  console.log(`\n🛑 ${signal} received. Shutting down gracefully...`);
 
   try {
     if (server) {
       await new Promise((resolve) => {
         server.close(() => {
-          console.log(
-            "✅ HTTP server closed",
-          );
+          console.log("✅ HTTP server closed");
 
           resolve();
         });
@@ -600,30 +528,19 @@ const gracefulShutdown = async (signal) => {
 
     await pool.end();
 
-    console.log(
-      "✅ PostgreSQL connection pool closed",
-    );
+    console.log("✅ PostgreSQL connection pool closed");
 
     process.exit(0);
   } catch (error) {
-    console.error(
-      "❌ Error during graceful shutdown:",
-      error,
-    );
+    console.error("❌ Error during graceful shutdown:", error);
 
     process.exit(1);
   }
 };
 
-process.on(
-  "SIGTERM",
-  () => gracefulShutdown("SIGTERM"),
-);
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
-process.on(
-  "SIGINT",
-  () => gracefulShutdown("SIGINT"),
-);
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 // =========================================================
 // START APPLICATION

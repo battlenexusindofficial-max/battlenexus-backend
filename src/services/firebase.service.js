@@ -156,7 +156,10 @@ const addTransaction = async (transactionData) => {
     const { db } = getFirebaseApp();
 
     // Create a new document with auto-generated ID
-    const transactionRef = db.collection("walletTransactions").doc();
+    const transactions = db.collection("walletTransactions");
+    const transactionRef = transactionData.documentId
+      ? transactions.doc(transactionData.documentId)
+      : transactions.doc();
 
     // Prepare the transaction data with all required fields
     const data = {
