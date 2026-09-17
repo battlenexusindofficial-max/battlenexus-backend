@@ -1,6 +1,7 @@
 // backend/src/config/firebase-admin.js
 
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 
@@ -8,13 +9,46 @@ console.log("🔄 Initializing Firebase Admin...");
 
 let firebaseApp = null;
 
+const normalizePrivateKey = (value) => {
+  let privateKey = value.trim();
+
+  // Remove wrapping quotes if present
+  while (
+    privateKey.length >= 2 &&
+    ((privateKey.startsWith('"') && privateKey.endsWith('"')) ||
+      (privateKey.startsWith("'") && privateKey.endsWith("'")))
+  ) {
+    privateKey = privateKey.slice(1, -1).trim();
+  }
+
+  // Convert literal \n from Render environment variable into real newlines
+  privateKey = privateKey.replace(/\\n/g, "\n").replace(/\r/g, "");
+
+  if (
+    !privateKey.includes("-----BEGIN PRIVATE KEY-----") ||
+    !privateKey.includes("-----END PRIVATE KEY-----")
+  ) {
+    throw new Error(
+      "FIREBASE_PRIVATE_KEY must contain a complete PEM private key",
+    );
+  }
+
+  try {
+    crypto.createPrivateKey(privateKey);
+  } catch (error) {
+    throw new Error(`FIREBASE_PRIVATE_KEY is not valid PEM: ${error.message}`);
+  }
+
+  return privateKey;
+};
+
 try {
   const keyPath = path.resolve(__dirname, "../../serviceAccountKey.json");
   const serviceAccount = process.env.FIREBASE_PRIVATE_KEY
     ? {
         project_id: process.env.FIREBASE_PROJECT_ID,
         client_email: process.env.FIREBASE_CLIENT_EMAIL,
-        private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        private_key: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
       }
     : fs.existsSync(keyPath)
       ? require(keyPath)
