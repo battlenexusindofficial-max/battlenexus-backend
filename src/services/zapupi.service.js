@@ -20,6 +20,10 @@ const ipv4Agent = new https.Agent({
 const ZAPUPI_API_BASE =
   process.env.ZAPUPI_API_BASE || "https://pay.zapupi.com/api";
 
+const BACKEND_API_URL = (
+  process.env.BACKEND_URL || "https://battlenexus-backend.onrender.com/api"
+).replace(/\/+$/, "");
+
 const ZAPUPI_API_KEY = process.env.ZAPUPI_API_KEY || "";
 
 const ZAPUPI_MODE = process.env.ZAPUPI_MODE || "production";
@@ -78,6 +82,23 @@ const MIN_TOPUP_AMOUNT = 10;
 const MAX_TOPUP_AMOUNT = 5000;
 
 const ALLOWED_TOPUP_AMOUNTS = [10, 20, 50, 100, 200, 500, 1000, 5000];
+
+const SUCCESS_PAYMENT_STATUSES = new Set([
+  "success",
+  "successful",
+  "paid",
+  "completed",
+  "complete",
+  "captured",
+  "settled",
+]);
+
+const isSuccessfulPaymentStatus = (status) =>
+  SUCCESS_PAYMENT_STATUSES.has(
+    String(status || "")
+      .trim()
+      .toLowerCase(),
+  );
 
 // ============================================================
 // VALIDATION
@@ -195,7 +216,7 @@ const createOrder = async (
 
       remark: options.remark || undefined,
 
-      webhook_url: options.webhookUrl || undefined,
+      webhook_url: options.webhookUrl || `${BACKEND_API_URL}/webhooks/zapupi`,
 
       success_url: options.successUrl || undefined,
 
@@ -429,22 +450,42 @@ const getOrderStatus = async (orderId) => {
     // Successful response
     // --------------------------------------------------------
 
-    if (data && String(data.status).toLowerCase() === "success") {
-      const paymentData = data.data || data;
-
+    const paymentData = data?.data || data;
+    if (
+      data &&
+      (isSuccessfulPaymentStatus(data.status) ||
+        isSuccessfulPaymentStatus(paymentData?.status) ||
+        isSuccessfulPaymentStatus(paymentData?.payment_status))
+    ) {
       return {
         success: true,
 
         payment: {
-          status: String(paymentData.status || "").trim(),
+          status: String(
+            paymentData.status ||
+              paymentData.payment_status ||
+              paymentData.paymentStatus ||
+              "",
+          ).trim(),
 
           order_id: String(
             paymentData.order_id || paymentData.orderId || orderId || "",
           ).trim(),
 
-          txn_id: String(paymentData.txn_id || paymentData.txnId || "").trim(),
+          txn_id: String(
+            paymentData.txn_id ||
+              paymentData.txnId ||
+              paymentData.transaction_id ||
+              paymentData.transactionId ||
+              paymentData.payment_id ||
+              paymentData.paymentId ||
+              paymentData.utr ||
+              "",
+          ).trim(),
 
-          amount: String(paymentData.amount || "").trim(),
+          amount: String(
+            paymentData.amount || paymentData.pay_amount || "",
+          ).trim(),
 
           pay_amount: String(
             paymentData.pay_amount || paymentData.payAmount || "",
@@ -489,11 +530,22 @@ const normalizeWebhook = (body) => {
   return {
     order_id: String(body?.order_id || body?.orderId || "").trim(),
 
-    txn_id: String(body?.txn_id || body?.txnId || "").trim(),
+    txn_id: String(
+      body?.txn_id ||
+        body?.txnId ||
+        body?.transaction_id ||
+        body?.transactionId ||
+        body?.payment_id ||
+        body?.paymentId ||
+        body?.utr ||
+        "",
+    ).trim(),
 
-    status: String(body?.status || "").trim(),
+    status: String(
+      body?.status || body?.payment_status || body?.paymentStatus || "",
+    ).trim(),
 
-    amount: String(body?.amount || "").trim(),
+    amount: String(body?.amount || body?.pay_amount || "").trim(),
 
     pay_amount: String(body?.pay_amount || body?.payAmount || "").trim(),
 
@@ -579,6 +631,7 @@ module.exports = {
   isTestWebhook,
 
   isExpectedEnvironment,
+  isSuccessfulPaymentStatus,
 
   isZapupiConfigured,
 

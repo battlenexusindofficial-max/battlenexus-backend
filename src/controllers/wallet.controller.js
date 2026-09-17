@@ -10,8 +10,12 @@ const {
   ALLOWED_TOPUP_AMOUNTS,
   MIN_TOPUP_AMOUNT,
   MAX_TOPUP_AMOUNT,
+  isSuccessfulPaymentStatus,
 } = require("../services/zapupi.service");
-const { processTopup } = require("../services/walletTopup.service");
+const {
+  processTopup,
+  recordFailedTopup,
+} = require("../services/walletTopup.service");
 const { logger } = require("../utils/logger");
 
 // ============================================================
@@ -53,11 +57,14 @@ const createTopupOrder = async (req, res) => {
 
     const amountInMinor = toMinor(amount, currency);
     const reference = generateReference("TOPUP");
+    const paymentReturnUrl = "battlenexus://wallet";
 
     const orderResult = await createOrder(amountInMinor, currency, reference, {
       mobile: user.phone || undefined,
       remark: `Wallet Topup | uid:${userId}`,
       webhookUrl: `${process.env.BACKEND_URL}/api/webhooks/zapupi`,
+      successUrl: `${paymentReturnUrl}?payment=success&order_id=${encodeURIComponent(reference)}`,
+      failedUrl: `${paymentReturnUrl}?payment=failed&order_id=${encodeURIComponent(reference)}`,
     });
 
     if (!orderResult.success) {
@@ -156,7 +163,7 @@ const verifyTopup = async (req, res) => {
     }
 
     const p = verify.payment;
-    if (!p.status || p.status.toLowerCase() !== "success") {
+    if (!isSuccessfulPaymentStatus(p.status)) {
       return res.status(400).json({
         success: false,
         error: `Payment not completed (status: ${p.status})`,
@@ -242,6 +249,14 @@ const checkPaymentStatus = async (req, res) => {
     if (
       ["successful", "failed", "refunded"].includes(orderResult.rows[0].status)
     ) {
+      if (orderResult.rows[0].status === "failed") {
+        await recordFailedTopup({
+          zapupiOrderId: orderResult.rows[0].zapupi_order_id,
+          userId,
+          providerStatus: "failed",
+          reason: "Payment was not completed by ZapUPI",
+        });
+      }
       return res.status(200).json({
         success: true,
         data: { status: orderResult.rows[0].status },
@@ -261,7 +276,7 @@ const checkPaymentStatus = async (req, res) => {
     const providerStatus = String(verify.payment.status || "").toLowerCase();
 
     if (
-      providerStatus === "success" &&
+      isSuccessfulPaymentStatus(providerStatus) &&
       verify.payment.order_id === order.zapupi_order_id &&
       verify.payment.txn_id
     ) {
@@ -311,6 +326,19 @@ const checkPaymentStatus = async (req, res) => {
       });
     }
 
+    if (
+      ["failed", "cancelled", "canceled", "expired", "timeout"].includes(
+        providerStatus,
+      )
+    ) {
+      await recordFailedTopup({
+        zapupiOrderId: order.zapupi_order_id,
+        userId: order.user_id,
+        providerStatus: verify.payment.status,
+        reason: "Payment was not completed by ZapUPI",
+      });
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -324,6 +352,99 @@ const checkPaymentStatus = async (req, res) => {
     return res
       .status(500)
       .json({ success: false, error: "Failed to check status" });
+  }
+};
+
+// ============================================================
+// RECONCILE PENDING TOP-UPS
+// ============================================================
+
+const reconcilePendingTopups = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const firebaseUid = req.user.firebase_uid;
+    const pendingOrders = await pool.query(
+      `SELECT id, user_id, amount_minor, currency, zapupi_order_id
+         FROM wallet_topup_orders
+        WHERE user_id = $1
+          AND (
+            status IN ('pending', 'processing')
+            OR (
+              status = 'successful'
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM wallet_transactions t
+                 WHERE t.zapupi_order_id = wallet_topup_orders.zapupi_order_id
+              )
+            )
+          )
+        ORDER BY created_at DESC
+        LIMIT 10`,
+      [userId],
+    );
+
+    const results = [];
+    for (const order of pendingOrders.rows) {
+      const verify = await getOrderStatus(order.zapupi_order_id);
+      if (!verify.success) {
+        results.push({ orderId: order.zapupi_order_id, status: "pending" });
+        continue;
+      }
+
+      const providerStatus = String(verify.payment.status || "")
+        .trim()
+        .toLowerCase();
+
+      if (
+        isSuccessfulPaymentStatus(providerStatus) &&
+        verify.payment.order_id === order.zapupi_order_id &&
+        verify.payment.txn_id
+      ) {
+        const processed = await processTopup({
+          zapupiOrderId: order.zapupi_order_id,
+          zapupiTransactionId: verify.payment.txn_id,
+          zapupiPaymentId: verify.payment.utr || verify.payment.txn_id,
+          userId,
+          firebaseUid,
+          amountInMinor: order.amount_minor,
+          verifiedAmount: verify.payment.amount,
+          providerStatus: verify.payment.status,
+          providerEnvironment: verify.payment.environment,
+          utr: verify.payment.utr,
+          currency: order.currency,
+          isWebhook: false,
+        });
+        results.push({
+          orderId: order.zapupi_order_id,
+          status: processed.success ? "successful" : "pending",
+        });
+        continue;
+      }
+
+      if (
+        ["failed", "cancelled", "canceled", "expired", "timeout"].includes(
+          providerStatus,
+        )
+      ) {
+        await recordFailedTopup({
+          zapupiOrderId: order.zapupi_order_id,
+          userId,
+          providerStatus: verify.payment.status,
+          reason: "Payment was not completed by ZapUPI",
+        });
+      }
+      results.push({
+        orderId: order.zapupi_order_id,
+        status: providerStatus || "pending",
+      });
+    }
+
+    return res.status(200).json({ success: true, data: results });
+  } catch (error) {
+    logger.error("RECONCILE_TOPUPS_ERROR", { error: error.message });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to reconcile payments" });
   }
 };
 
@@ -418,6 +539,7 @@ module.exports = {
   createTopupOrder,
   verifyTopup,
   checkPaymentStatus,
+  reconcilePendingTopups,
   getWalletBalance,
   getTransactions,
   getTopupConfig,
