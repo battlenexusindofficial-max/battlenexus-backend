@@ -374,7 +374,9 @@ const createOrder = async (
 // ORDER STATUS
 // ============================================================
 
-const getOrderStatus = async (orderId) => {
+const getOrderStatus = async (
+  orderId,
+) => {
   try {
     // --------------------------------------------------------
     // Configuration check
@@ -430,7 +432,43 @@ const getOrderStatus = async (orderId) => {
       },
     );
 
-    const data = response.data;
+    const data =
+      response.data;
+
+    // --------------------------------------------------------
+    // HTTP error
+    // --------------------------------------------------------
+
+    if (
+      response.status < 200 ||
+      response.status >= 300
+    ) {
+      console.error(
+        "❌ ZapUPI status HTTP error:",
+        response.status,
+        data
+      );
+
+      return {
+        success: false,
+
+        error:
+          data?.message ||
+          `ZapUPI returned HTTP ${response.status}`,
+      };
+    }
+
+    // --------------------------------------------------------
+    // Successful response
+    // --------------------------------------------------------
+
+    if (
+      data &&
+      String(data.status).toLowerCase() ===
+        "success"
+    ) {
+      const paymentData =
+        data.data || data;
 
     // --------------------------------------------------------
     // HTTP error

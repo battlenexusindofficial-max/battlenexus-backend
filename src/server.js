@@ -39,19 +39,28 @@ try {
 
   const firebaseAdmin = require("./config/firebase-admin");
 
-  if (firebaseAdmin && firebaseAdmin.admin && firebaseAdmin.firebaseApp) {
+  if (
+    firebaseAdmin &&
+    firebaseAdmin.admin &&
+    firebaseAdmin.firebaseApp
+  ) {
     admin = firebaseAdmin.admin;
     firebaseAdminLoaded = true;
 
     console.log("✅ Firebase Admin loaded successfully");
-    console.log(`📦 admin.auth type: ${typeof admin.auth}`);
+    console.log(
+      `📦 admin.auth type: ${typeof admin.auth}`,
+    );
   } else {
     console.warn(
       "⚠️ Firebase Admin initialization failed - continuing without it",
     );
   }
 } catch (error) {
-  console.warn("⚠️ Firebase Admin not available:", error.message);
+  console.warn(
+    "⚠️ Firebase Admin not available:",
+    error.message,
+  );
 }
 
 // =========================================================
@@ -141,7 +150,13 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(new Error("Origin is not allowed by CORS"));
+      if (corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error("Origin is not allowed by CORS"),
+      );
     },
 
     credentials: true,
@@ -179,7 +194,16 @@ app.use((req, res, next) => {
 
   console.log(
     "CONTENT-ENCODING:",
-    JSON.stringify(req.headers["content-encoding"]),
+    JSON.stringify(
+      req.headers["content-encoding"],
+    ),
+  );
+
+  console.log(
+    "CONTENT-LENGTH:",
+    JSON.stringify(
+      req.headers["content-length"],
+    ),
   );
 
   console.log("CONTENT-LENGTH:", JSON.stringify(req.headers["content-length"]));
@@ -213,10 +237,14 @@ app.use((req, res, next) => {
     return next();
   }
 
-  const contentType = String(req.headers["content-type"] || "").toLowerCase();
+  const contentType = String(
+    req.headers["content-type"] || "",
+  ).toLowerCase();
 
   if (
-    !contentType.startsWith("application/json") &&
+    !contentType.startsWith(
+      "application/json",
+    ) &&
     !contentType.includes("+json")
   ) {
     return next();
@@ -346,7 +374,10 @@ app.get("/api/health", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Health check database error:", error);
+    console.error(
+      "❌ Health check database error:",
+      error,
+    );
 
     return res.status(503).json({
       success: false,
@@ -362,7 +393,10 @@ app.get("/api/health", async (req, res) => {
 // =========================================================
 
 app.get("/health", async (req, res) => {
-  return res.redirect(307, "/api/health");
+  return res.redirect(
+    307,
+    "/api/health",
+  );
 });
 
 // =========================================================
@@ -370,7 +404,9 @@ app.get("/health", async (req, res) => {
 // =========================================================
 
 app.use((req, res) => {
-  console.log(`❌ 404 ROUTE NOT FOUND: ${req.method} ${req.originalUrl}`);
+  console.log(
+    `❌ 404 ROUTE NOT FOUND: ${req.method} ${req.originalUrl}`,
+  );
 
   return res.status(404).json({
     success: false,
